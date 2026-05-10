@@ -67,6 +67,7 @@ nav:
     - Ports Reference: configuration/ports.md
     - Multi-Account Isolation: configuration/multi-account.md
     - Storage Modes: configuration/storage.md
+    - TLS / HTTPS: configuration/tls.md
     - Initialization Hooks: configuration/initialization-hooks.md
     - Advanced:
       - application.yml Reference: configuration/advanced/application-yml.md
