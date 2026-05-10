@@ -56,14 +56,19 @@ The port (`4566`), credentials (`test` / `test`), and AWS SDK configuration are 
 | `LOCALSTACK_HOST` | `FLOCI_HOSTNAME` | Hostname embedded in response URLs |
 | `LOCALSTACK_HOSTNAME` | `FLOCI_HOSTNAME` | Alias — same effect |
 | `PERSISTENCE=1` | `FLOCI_STORAGE_MODE=persistent` | Enable disk persistence |
+| `PERSIST_STATE=1` | `FLOCI_STORAGE_MODE=persistent` | Alias for `PERSISTENCE` — same effect |
 | `EDGE_PORT` | `FLOCI_PORT` | Bind port override |
 | `GATEWAY_LISTEN` | `QUARKUS_HTTP_HOST` | Bind address override |
 | `LS_LOG` / `DEBUG=1` | `QUARKUS_LOG_LEVEL` | Log verbosity |
+| `DOCKER_HOST` | `FLOCI_DOCKER_DOCKER_HOST` | Docker daemon socket path or TCP address |
 | `LAMBDA_DOCKER_NETWORK` | `FLOCI_SERVICES_LAMBDA_DOCKER_NETWORK` | Network for Lambda containers |
 | `DOCKER_NETWORK` | `FLOCI_SERVICES_DOCKER_NETWORK` | Network for all spawned containers |
 | `LAMBDA_REMOVE_CONTAINERS=1` | `FLOCI_SERVICES_LAMBDA_EPHEMERAL=true` | Remove Lambda containers after invocation |
+| `USE_SSL=1` | `FLOCI_TLS_ENABLED=true` | Enable TLS/HTTPS — see [TLS / HTTPS](../configuration/tls.md) |
+| `CUSTOM_SSL_CERT_PATH` | `FLOCI_TLS_CERT_PATH` + `FLOCI_TLS_KEY_PATH` | LocalStack accepts a single combined PEM; Floci accepts it in both fields |
 | `SERVICES` | _(not needed)_ | Floci starts all 41 services instantly; no selection required |
 | `LAMBDA_EXECUTOR` | _(not needed)_ | Floci always runs Lambda in Docker containers |
+| `LAMBDA_REMOTE_DOCKER` | _(not supported)_ | Use per-function `S3Bucket=hot-reload` instead — see [Lambda](../services/lambda.md) |
 
 ### 3 — Init scripts (no change required)
 

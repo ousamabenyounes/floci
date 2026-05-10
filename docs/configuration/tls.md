@@ -31,17 +31,6 @@ client = boto3.client('sts', endpoint_url='https://localhost:4566', verify=False
 | `FLOCI_TLS_KEY_PATH` | *(unset)* | Path to PEM private key file |
 | `FLOCI_TLS_SELF_SIGNED` | `true` | Auto-generate a self-signed certificate when no cert/key paths provided |
 
-### application.yml
-
-```yaml
-floci:
-  tls:
-    enabled: false
-    # cert-path: "/path/to/cert.pem"
-    # key-path: "/path/to/key.pem"
-    self-signed: true
-```
-
 ## Self-Signed Certificate
 
 When `FLOCI_TLS_ENABLED=true` and no custom certificate is provided, Floci auto-generates a self-signed certificate at startup. The certificate:

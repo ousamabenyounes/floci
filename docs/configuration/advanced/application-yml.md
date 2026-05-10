@@ -80,6 +80,12 @@ floci:
     validate-signatures: false               # Set to true to enforce AWS SigV4 validation
     presign-secret: local-emulator-secret    # HMAC secret for S3 pre-signed URL verification
 
+  tls:
+    enabled: false                           # FLOCI_TLS_ENABLED — enable HTTPS on all endpoints
+    # cert-path: ""                          # FLOCI_TLS_CERT_PATH — PEM certificate file path
+    # key-path: ""                           # FLOCI_TLS_KEY_PATH — PEM private key file path
+    self-signed: true                        # FLOCI_TLS_SELF_SIGNED — auto-generate cert when no paths provided
+
   docker:
     log-max-size: "10m"                      # Max size per container log file before rotation
     log-max-file: "3"                        # Number of rotated log files to retain
