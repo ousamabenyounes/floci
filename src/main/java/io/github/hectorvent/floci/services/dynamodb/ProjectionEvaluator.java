@@ -144,35 +144,55 @@ final class ProjectionEvaluator {
         if (idx == segments.size() - 1) {
             // Leaf: copy the whole attribute node
             dest.set(seg, child);
-        } else {
-            String nextSeg = segments.get(idx + 1);
-            if (nextSeg.matches("\\[\\d+\\]")) {
-                // Next is a list index — extract just that element
-                int listIdx = Integer.parseInt(nextSeg.substring(1, nextSeg.length() - 1));
-                JsonNode listNode = child.has("L") ? child.get("L") : child;
-                if (listNode.isArray() && listIdx < listNode.size()) {
-                    JsonNode element = listNode.get(listIdx);
-                    // Build {"L": [element]} wrapper
-                    ObjectNode wrapper = MAPPER.createObjectNode();
-                    ArrayNode newList = MAPPER.createArrayNode();
-                    newList.add(element);
-                    wrapper.set("L", newList);
-                    dest.set(seg, wrapper);
-                }
-            } else if (child.has("M")) {
-                // Nested map — recurse
-                ObjectNode nestedDest = MAPPER.createObjectNode();
-                copyPath(child.get("M"), nestedDest, segments, idx + 1);
-                ObjectNode wrapper = MAPPER.createObjectNode();
-                wrapper.set("M", nestedDest);
-                dest.set(seg, wrapper);
-            } else if (child.isObject()) {
-                ObjectNode nestedDest = MAPPER.createObjectNode();
-                copyPath(child, nestedDest, segments, idx + 1);
-                dest.set(seg, nestedDest);
+            return;
+        }
+
+        String nextSeg = segments.get(idx + 1);
+        if (nextSeg.matches("\\[\\d+\\]")) {
+            // Next is a list index — extract just that element, appending to any sibling-path list wrapper
+            int listIdx = Integer.parseInt(nextSeg.substring(1, nextSeg.length() - 1));
+            JsonNode listNode = child.has("L") ? child.get("L") : child;
+            if (!listNode.isArray() || listIdx >= listNode.size()) return;
+            JsonNode element = listNode.get(listIdx);
+            JsonNode existing = dest.get(seg);
+            ObjectNode wrapper;
+            ArrayNode targetList;
+            if (existing instanceof ObjectNode existingObj && existingObj.has("L") && existingObj.get("L").isArray()) {
+                wrapper = existingObj;
+                targetList = (ArrayNode) wrapper.get("L");
             } else {
-                dest.set(seg, child);
+                wrapper = MAPPER.createObjectNode();
+                targetList = MAPPER.createArrayNode();
+                wrapper.set("L", targetList);
             }
+            targetList.add(element);
+            dest.set(seg, wrapper);
+        } else if (child.has("M")) {
+            // Nested map — recurse, merging into any sibling-path map wrapper instead of overwriting
+            JsonNode existing = dest.get(seg);
+            ObjectNode wrapper;
+            ObjectNode nestedDest;
+            if (existing instanceof ObjectNode existingObj
+                    && existingObj.get("M") instanceof ObjectNode existingMap) {
+                wrapper = existingObj;
+                nestedDest = existingMap;
+            } else {
+                nestedDest = MAPPER.createObjectNode();
+                wrapper = MAPPER.createObjectNode();
+                wrapper.set("M", nestedDest);
+            }
+            copyPath(child.get("M"), nestedDest, segments, idx + 1);
+            dest.set(seg, wrapper);
+        } else if (child.isObject()) {
+            JsonNode existing = dest.get(seg);
+            ObjectNode nestedDest = (existing instanceof ObjectNode existingObj
+                    && !existingObj.has("M") && !existingObj.has("L"))
+                    ? existingObj
+                    : MAPPER.createObjectNode();
+            copyPath(child, nestedDest, segments, idx + 1);
+            dest.set(seg, nestedDest);
+        } else {
+            dest.set(seg, child);
         }
     }
 }
