@@ -494,6 +494,22 @@ public class DynamoDbJsonHandler {
             checkUnusedEav(exprAttrValues, colonTokensAll);
         }
 
+        // Legacy AttributeUpdates parameter — Expected + ConditionalOperator (see handlePutItem/handleDeleteItem).
+        JsonNode expectedUpd = request.has("Expected") ? request.get("Expected") : null;
+        String condOpUpd = request.has("ConditionalOperator")
+                ? request.get("ConditionalOperator").asText() : "AND";
+
+        if (conditionExpression != null && expectedUpd != null) {
+            throw new AwsException("ValidationException",
+                    "Can not use both expression and non-expression parameters in the same request: "
+                    + "Non-expression parameters: {Expected} Expression parameters: {ConditionExpression}", 400);
+        }
+
+        if (expectedUpd != null) {
+            JsonNode existingForUpd = dynamoDbService.getItem(tableName, key, region);
+            evaluateLegacyExpected(existingForUpd, expectedUpd, condOpUpd, returnValuesOnConditionCheckFailure);
+        }
+
         DynamoDbService.UpdateResult result = dynamoDbService.updateItem(
                 tableName, key, updateData, updateExpression, exprAttrNames, exprAttrValues,
                 returnValues, conditionExpression, region, returnValuesOnConditionCheckFailure);
@@ -533,7 +549,7 @@ public class DynamoDbJsonHandler {
                 boolean exists = condition.get("Exists").asBoolean();
                 condResult = exists ? attrValue != null : attrValue == null;
             } else {
-                condResult = dynamoDbService.matchesKeyConditionPublic(attrValue, condition);
+                condResult = dynamoDbService.matchesKeyConditionPublic(attrValue, toKeyConditionShape(condition));
             }
             if (useOr) overall = overall || condResult;
             else overall = overall && condResult;
@@ -545,6 +561,23 @@ public class DynamoDbJsonHandler {
                 throw new ConditionalCheckFailedException(null);
             }
         }
+    }
+
+    /**
+     * The legacy Expected parameter encodes the operand as {@code Value} (singular),
+     * but matchesKeyCondition reads {@code AttributeValueList} (the QueryFilter / ScanFilter
+     * shape). Wrap a singular Value into a one-element list when present.
+     */
+    private JsonNode toKeyConditionShape(JsonNode legacyCondition) {
+        if (legacyCondition == null || legacyCondition.has("AttributeValueList") || !legacyCondition.has("Value")) {
+            return legacyCondition;
+        }
+        ObjectNode normalized = legacyCondition.deepCopy();
+        ArrayNode list = objectMapper.createArrayNode();
+        list.add(normalized.get("Value"));
+        normalized.remove("Value");
+        normalized.set("AttributeValueList", list);
+        return normalized;
     }
 
     private void addItemCollectionMetrics(ObjectNode response, JsonNode request, String tableName,

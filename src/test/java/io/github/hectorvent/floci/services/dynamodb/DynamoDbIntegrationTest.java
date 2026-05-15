@@ -1336,6 +1336,199 @@ given()
     }
 
     @Test
+    void updateItemLegacyExpectedConditionFailsOnMissingItem() {
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable1",
+                    "KeySchema": [
+                        {"AttributeName": "PK", "KeyType": "HASH"},
+                        {"AttributeName": "SK", "KeyType": "RANGE"}
+                    ],
+                    "AttributeDefinitions": [
+                        {"AttributeName": "PK", "AttributeType": "S"},
+                        {"AttributeName": "SK", "AttributeType": "S"}
+                    ],
+                    "BillingMode": "PAY_PER_REQUEST"
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+
+        // UpdateItem against a non-existent item with a legacy Expected condition
+        // that cannot be satisfied (attribute MEM_NO does not exist on the missing item).
+        // Real DynamoDB returns ConditionalCheckFailedException; the bug is that
+        // floci silently created the item instead.
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable1",
+                    "Key": {"PK": {"S": "k1"}, "SK": {"S": "s1"}},
+                    "Expected": {"MEM_NO": {"ComparisonOperator": "EQ", "Value": {"N": "1"}}},
+                    "AttributeUpdates": {
+                        "SESSION_DATA": {"Action": "PUT", "Value": {"S": "{}"}},
+                        "VERSION":      {"Action": "ADD", "Value": {"N": "1"}}
+                    }
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(400)
+            .body("__type", equalTo("ConditionalCheckFailedException"));
+
+        // Confirm the item was NOT created (the failing condition must abort the write).
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.GetItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable1", "Key": {"PK": {"S": "k1"}, "SK": {"S": "s1"}}}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200)
+            .body("Item", is(nullValue()));
+
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable1"}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+    }
+
+    @Test
+    void updateItemLegacyExpectedConditionPassesWhenMatch() {
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable2",
+                    "KeySchema": [{"AttributeName": "pk", "KeyType": "HASH"}],
+                    "AttributeDefinitions": [{"AttributeName": "pk", "AttributeType": "S"}],
+                    "BillingMode": "PAY_PER_REQUEST"
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.PutItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable2",
+                 "Item": {"pk": {"S": "k1"}, "version": {"N": "1"}}}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+
+        // Existing legacy Expected condition matches → UpdateItem must succeed.
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable2",
+                    "Key": {"pk": {"S": "k1"}},
+                    "Expected": {"version": {"ComparisonOperator": "EQ", "Value": {"N": "1"}}},
+                    "AttributeUpdates": {"version": {"Action": "PUT", "Value": {"N": "2"}}}
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.GetItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable2", "Key": {"pk": {"S": "k1"}}}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200)
+            .body("Item.version.N", equalTo("2"));
+
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable2"}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+    }
+
+    @Test
+    void updateItemRejectsLegacyExpectedAndConditionExpressionTogether() {
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.CreateTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable3",
+                    "KeySchema": [{"AttributeName": "pk", "KeyType": "HASH"}],
+                    "AttributeDefinitions": [{"AttributeName": "pk", "AttributeType": "S"}],
+                    "BillingMode": "PAY_PER_REQUEST"
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+
+        // Real DynamoDB rejects requests that mix legacy Expected with ConditionExpression.
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.UpdateItem")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {
+                    "TableName": "LegacyExpectedTable3",
+                    "Key": {"pk": {"S": "k1"}},
+                    "Expected": {"version": {"Exists": false}},
+                    "ConditionExpression": "attribute_not_exists(version)",
+                    "AttributeUpdates": {"version": {"Action": "PUT", "Value": {"N": "1"}}}
+                }
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(400)
+            .body("__type", equalTo("ValidationException"));
+
+        given()
+            .header("X-Amz-Target", "DynamoDB_20120810.DeleteTable")
+            .contentType(DYNAMODB_CONTENT_TYPE)
+            .body("""
+                {"TableName": "LegacyExpectedTable3"}
+                """)
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200);
+    }
+
+    @Test
     void updateAndDescribeContinuousBackups() {
         given()
             .header("X-Amz-Target", "DynamoDB_20120810.CreateTable")
