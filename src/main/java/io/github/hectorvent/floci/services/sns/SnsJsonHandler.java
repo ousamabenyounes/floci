@@ -209,12 +209,14 @@ public class SnsJsonHandler {
     private Response handlePublishBatch(JsonNode request, String region) {
         String topicArn = request.path("TopicArn").asText(null);
         List<Map<String, Object>> entries = new ArrayList<>();
+        List<String[]> entryAttributeFailures = new ArrayList<>();
 
         JsonNode entriesNode = request.path("PublishBatchRequestEntries");
         if (entriesNode.isArray()) {
             for (JsonNode entryNode : entriesNode) {
+                String id = entryNode.path("Id").asText(null);
                 Map<String, Object> entry = new HashMap<>();
-                entry.put("Id", entryNode.path("Id").asText(null));
+                entry.put("Id", id);
                 entry.put("Message", entryNode.path("Message").asText(null));
                 entry.put("Subject", entryNode.path("Subject").asText(null));
                 entry.put("MessageGroupId", entryNode.path("MessageGroupId").asText(null));
@@ -222,7 +224,14 @@ public class SnsJsonHandler {
 
                 JsonNode attrsNode = entryNode.path("MessageAttributes");
                 if (attrsNode.isObject()) {
-                    entry.put("MessageAttributes", parseMessageAttributes(attrsNode));
+                    try {
+                        entry.put("MessageAttributes", parseMessageAttributes(attrsNode));
+                    } catch (AwsException e) {
+                        // Real AWS SNS surfaces per-entry attribute errors as Failed entries
+                        // and keeps processing the rest of the batch, instead of aborting.
+                        entryAttributeFailures.add(new String[]{id, e.getErrorCode(), e.getMessage(), "true"});
+                        continue;
+                    }
                 }
 
                 entries.add(entry);
@@ -240,7 +249,9 @@ public class SnsJsonHandler {
             successful.add(item);
         }
         ArrayNode failed = response.putArray("Failed");
-        for (String[] f : result.failed()) {
+        List<String[]> allFailed = new ArrayList<>(result.failed());
+        allFailed.addAll(entryAttributeFailures);
+        for (String[] f : allFailed) {
             ObjectNode item = objectMapper.createObjectNode();
             item.put("Id", f[0]);
             item.put("Code", f[1]);

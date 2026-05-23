@@ -205,6 +205,7 @@ public class SnsQueryHandler {
     private Response handlePublishBatch(MultivaluedMap<String, String> params, String region) {
         String topicArn = getParam(params, "TopicArn");
         List<Map<String, Object>> entries = new ArrayList<>();
+        List<String[]> entryAttributeFailures = new ArrayList<>();
         for (int i = 1; ; i++) {
             String entryPrefix = "PublishBatchRequestEntries.member." + i;
             String id = getParam(params, entryPrefix + ".Id");
@@ -220,7 +221,10 @@ public class SnsQueryHandler {
             try {
                 attributes = parseMessageAttributes(params, entryPrefix + ".MessageAttributes.entry.");
             } catch (AwsException e) {
-                return xmlErrorResponse(e.getErrorCode(), e.getMessage(), e.getHttpStatus());
+                // Real AWS SNS surfaces per-entry attribute errors as Failed entries
+                // and keeps processing the rest of the batch, instead of aborting.
+                entryAttributeFailures.add(new String[]{id, e.getErrorCode(), e.getMessage(), "true"});
+                continue;
             }
             if (!attributes.isEmpty()) entry.put("MessageAttributes", attributes);
             entries.add(entry);
@@ -233,7 +237,9 @@ public class SnsQueryHandler {
                 xml.start("member").elem("Id", s[0]).elem("MessageId", s[1]).end("member");
             }
             xml.end("Successful").start("Failed");
-            for (String[] f : result.failed()) {
+            List<String[]> allFailed = new ArrayList<>(result.failed());
+            allFailed.addAll(entryAttributeFailures);
+            for (String[] f : allFailed) {
                 xml.start("member").elem("Id", f[0]).elem("Code", f[1])
                    .elem("Message", f[2]).elem("SenderFault", f[3]).end("member");
             }
