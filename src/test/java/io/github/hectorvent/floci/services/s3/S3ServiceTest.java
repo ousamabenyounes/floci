@@ -575,6 +575,28 @@ class S3ServiceTest {
     }
 
     @Test
+    void putObjectWithTags() {
+        s3Service.createBucket("test-bucket", "us-east-1");
+        Map<String, String> tags = Map.of("env", "test", "project", "floci");
+        S3Object put = s3Service.putObject("test-bucket", "tagged.txt", "data".getBytes(), "text/plain", null,
+                new PutObjectOptions().withTags(tags));
+
+        assertEquals(tags, put.getTags());
+
+        Map<String, String> retrieved = s3Service.getObjectTagging("test-bucket", "tagged.txt");
+        assertEquals(tags, retrieved);
+    }
+
+    @Test
+    void putObjectWithoutTagsHasEmptyTagSet() {
+        s3Service.createBucket("test-bucket", "us-east-1");
+        s3Service.putObject("test-bucket", "notags.txt", "data".getBytes(), "text/plain", null);
+
+        Map<String, String> retrieved = s3Service.getObjectTagging("test-bucket", "notags.txt");
+        assertTrue(retrieved.isEmpty());
+    }
+
+    @Test
     void putObjectWithInternalTraversalStaysWithinBucket() {
         s3Service.createBucket("test-bucket", "us-east-1");
         byte[] data = "safe-content".getBytes();

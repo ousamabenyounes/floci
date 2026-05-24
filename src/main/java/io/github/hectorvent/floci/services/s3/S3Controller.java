@@ -494,6 +494,8 @@ public class S3Controller {
             String cacheControl = httpHeaders.getHeaderString("Cache-Control");
             String serverSideEncryption = httpHeaders.getHeaderString("x-amz-server-side-encryption");
             String cannedAcl = httpHeaders.getHeaderString("x-amz-acl");
+            String taggingHeader = httpHeaders.getHeaderString("x-amz-tagging");
+            Map<String, String> tagging = parseTaggingHeader(taggingHeader);
             S3Object obj = s3Service.putObject(bucket, key, data, contentType, extractUserMetadata(httpHeaders),
                     new PutObjectOptions()
                             .withStorageClass(httpHeaders.getHeaderString("x-amz-storage-class"))
@@ -506,7 +508,8 @@ public class S3Controller {
                             .withServerSideEncryption(serverSideEncryption)
                             .withAcl(cannedAcl)
                             .withChecksumAlgorithm(checksumAlgorithm)
-                            .withClientChecksum(extractChecksumFromHeaders(httpHeaders)));
+                            .withClientChecksum(extractChecksumFromHeaders(httpHeaders))
+                            .withTags(tagging));
             var resp = Response.ok().header("ETag", obj.getETag());
             if (obj.getVersionId() != null) {
                 resp.header("x-amz-version-id", obj.getVersionId());
@@ -2390,5 +2393,30 @@ public class S3Controller {
     }
 
     private record ParsedCopySource(String objectKey, String versionId) {
+    }
+
+    /**
+     * Parses the {@code x-amz-tagging} header value into a map of key-value pairs.
+     * The header value uses URL-encoded query-string format: {@code key1=value1&key2=value2}.
+     * Both keys and values must be URL-decoded per the AWS S3 PutObject API specification.
+     * Returns an empty map (not null) for a null or blank header to simplify callers.
+     */
+    private static Map<String, String> parseTaggingHeader(String taggingHeader) {
+        if (taggingHeader == null || taggingHeader.isBlank()) {
+            return Map.of();
+        }
+        Map<String, String> tags = new LinkedHashMap<>();
+        for (String pair : taggingHeader.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq <= 0) {
+                continue; // skip malformed pairs (no key or missing '=')
+            }
+            String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+            String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+            if (!key.isBlank()) {
+                tags.put(key, value);
+            }
+        }
+        return tags;
     }
 }
