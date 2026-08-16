@@ -20,6 +20,7 @@ public class Bucket {
     private boolean objectLockEnabled;
     private ObjectLockRetention defaultRetention; // null if no default rule
     private String policy;
+    private String replicationConfiguration; // XML string; null until first PutBucketReplication
     private String corsConfiguration;
     private String lifecycleConfiguration;
     private String transitionDefaultMinimumObjectSize; // x-amz-transition-default-minimum-object-size header value
@@ -78,6 +79,9 @@ public class Bucket {
 
     public String getPolicy() { return policy; }
     public void setPolicy(String policy) { this.policy = policy; }
+
+    public String getReplicationConfiguration() { return replicationConfiguration; }
+    public void setReplicationConfiguration(String replicationConfiguration) { this.replicationConfiguration = replicationConfiguration; }
 
     public String getCorsConfiguration() { return corsConfiguration; }
     public void setCorsConfiguration(String corsConfiguration) { this.corsConfiguration = corsConfiguration; }

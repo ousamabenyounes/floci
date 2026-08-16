@@ -1827,6 +1827,34 @@ public class S3Service implements Resettable {
         bucketStore.put(bucketName, bucket);
     }
 
+    // Floci does not model replication behavior; it stores the configuration verbatim and echoes it
+    // back so PutBucketReplication / GetBucketReplication are distinguishable from CreateBucket /
+    // ListObjects (issue #2296). The SDK and Terraform provider only require the three verbs to be
+    // routed and the "not configured" state to surface as ReplicationConfigurationNotFoundError.
+    public String getBucketReplication(String bucketName) {
+        Bucket bucket = bucketStore.get(bucketName)
+                .orElseThrow(() -> new AwsException("NoSuchBucket", "The specified bucket does not exist.", 404));
+        if (bucket.getReplicationConfiguration() == null) {
+            throw new AwsException("ReplicationConfigurationNotFoundError",
+                    "The replication configuration was not found", 404);
+        }
+        return bucket.getReplicationConfiguration();
+    }
+
+    public void putBucketReplication(String bucketName, String replication) {
+        Bucket bucket = bucketStore.get(bucketName)
+                .orElseThrow(() -> new AwsException("NoSuchBucket", "The specified bucket does not exist.", 404));
+        bucket.setReplicationConfiguration(replication);
+        bucketStore.put(bucketName, bucket);
+    }
+
+    public void deleteBucketReplication(String bucketName) {
+        Bucket bucket = bucketStore.get(bucketName)
+                .orElseThrow(() -> new AwsException("NoSuchBucket", "The specified bucket does not exist.", 404));
+        bucket.setReplicationConfiguration(null);
+        bucketStore.put(bucketName, bucket);
+    }
+
     public String getBucketCors(String bucketName) {
         Bucket bucket = bucketStore.get(bucketName)
                 .orElseThrow(() -> new AwsException("NoSuchBucket", "The specified bucket does not exist.", 404));

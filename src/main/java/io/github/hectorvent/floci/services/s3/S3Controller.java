@@ -282,6 +282,10 @@ public class S3Controller {
                 s3Service.putBucketPolicy(bucket, new String(body, StandardCharsets.UTF_8));
                 return Response.ok().build();
             }
+            if (hasQueryParam(uriInfo, "replication")) {
+                s3Service.putBucketReplication(bucket, new String(body, StandardCharsets.UTF_8));
+                return Response.ok().build();
+            }
             if (hasQueryParam(uriInfo, "cors")) {
                 s3Service.putBucketCors(bucket, new String(body, StandardCharsets.UTF_8));
                 return Response.ok().build();
@@ -402,9 +406,11 @@ public class S3Controller {
                 return Response.noContent().build();
             }
             if (hasQueryParam(uriInfo, "replication")) {
-                // Floci does not model bucket replication; DeleteBucketReplication is a
-                // no-op that always returns 204, matching real S3. Crucially it must be
-                // handled here so it does NOT fall through to deleting the whole bucket.
+                // DeleteBucketReplication removes the stored replication configuration and
+                // returns 204, matching real S3. It must be handled here so it does NOT fall
+                // through to deleting the whole bucket, and so a later GetBucketReplication
+                // reports ReplicationConfigurationNotFoundError instead of stale config.
+                s3Service.deleteBucketReplication(bucket);
                 return Response.noContent().build();
             }
             if (hasQueryParam(uriInfo, "accelerate")) {
@@ -482,6 +488,10 @@ public class S3Controller {
             if (hasQueryParam(uriInfo, "policy")) {
                 s3Service.authorizeBucketRead(bucket, "s3:GetBucketPolicy", authorization);
                 return Response.ok(s3Service.getBucketPolicy(bucket)).build();
+            }
+            if (hasQueryParam(uriInfo, "replication")) {
+                s3Service.authorizeBucketRead(bucket, "s3:GetReplicationConfiguration", authorization);
+                return Response.ok(s3Service.getBucketReplication(bucket)).build();
             }
             if (hasQueryParam(uriInfo, "cors")) {
                 s3Service.authorizeBucketRead(bucket, "s3:GetBucketCORS", authorization);
